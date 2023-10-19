@@ -1,0 +1,107 @@
+# Set up a database
+import sqlite3
+
+conn = sqlite3.connect("expense_tracker.db")
+cursor = conn.cursor()
+
+# Create tables for income, expenses, budget, and user settings.
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS income (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        description TEXT,
+        amount REAL,
+        date DATE
+    )
+""")
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        description TEXT,
+        amount REAL,
+        date DATE
+    )
+""")
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS budget (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT,
+        amount REAL
+    )
+""")
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT,
+        alerts BOOLEAN
+    )
+""")
+
+conn.commit()
+
+# Implement functions for data entry
+def add_income(description, amount, date):
+    cursor.execute("INSERT INTO income (description, amount, date) VALUES (?, ?, ?)", (description, amount, date))
+    conn.commit()
+
+def add_expense(description, amount, date):
+    cursor.execute("INSERT INTO expenses (description, amount, date) VALUES (?, ?, ?)", (description, amount, date))
+    conn.commit()
+
+def set_budget(category, amount):
+    cursor.execute("INSERT OR REPLACE INTO budget (category, amount) VALUES (?, ?)", (category, amount))
+    conn.commit()
+
+def save_user_settings(email, alerts):
+    cursor.execute("INSERT OR REPLACE INTO user_settings (email, alerts) VALUES (?, ?)", (email, alerts))
+    conn.commit()
+
+# Define functions for alerting (email)
+import smtplib
+
+def send_email_alert(email, budget_status):
+    smtp_server = "smtp.gmail.com"
+    smtp_port = 465 
+    smtp_user = "sanuja.ratna@gmail.com"  
+    smtp_password = "*****************"  
+
+    server = smtplib.SMTP(smtp_server, smtp_port)
+    server.starttls()
+    server.login(smtp_user, smtp_password)
+
+    if budget_status == "poor":
+        message = "You're overspending! Consider revising your budget."
+    elif budget_status == "fine":
+        message = "You're doing well in sticking to your budget."
+    elif budget_status == "good":
+        message = "You're comfortably within your budget."
+
+    subject = "Expense Tracker Budget Alert"
+    body = f"Dear User,\n\n{message}"
+
+    msg = f"Subject: {subject}\n\n{body}"
+    server.sendmail(smtp_user, email, msg)
+
+    server.quit()
+
+# Implement budget tracking and alerts
+def check_budget_status(email):
+    cursor.execute("SELECT SUM(amount) FROM income")
+    total_income = cursor.fetchone()[0]
+
+    cursor.execute("SELECT SUM(amount) FROM expenses")
+    total_expenses = cursor.fetchone()[0]
+
+    cursor.execute("SELECT category, amount FROM budget")
+    budget_data = cursor.fetchall()
+
+    budget_status = "good"  # Set a default budget status
+
+    for category, amount in budget_data:
+        if total_expenses > amount:
+            budget_status = "poor"
+            send_email_alert(email, budget_status)
+            break
+        elif total_expenses <= amount:
+            budget_status = "fine"
+
+    return budget_status
